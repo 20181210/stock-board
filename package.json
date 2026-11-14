@@ -1,0 +1,8 @@
+{
+  "name": "free-chart",
+  "private": true,
+  "scripts": {
+    "start": "python server.py",
+    "test": "python -m unittest discover -s tests -v"
+  }
+}

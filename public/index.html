@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>股票看板 · Free Chart</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%231a9988'/%3E%3Cpath d='M8 28l8-10 7 5 10-14' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/light.css">
+  <script defer src="/vendor/klinecharts.min.js"></script><script defer src="/data.js"></script><script defer src="/studies.js"></script><script defer src="/chart-extensions.js"></script><script defer src="/app.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/" aria-label="股票看板首页"><span class="brand-mark">↗</span><strong>股票看板</strong><span class="brand-en">STOCK BOARD</span></a>
+  <div id="symbol-tabs" class="symbol-tabs" aria-label="已打开品种"></div>
+  <div class="top-right"><span class="live-dot"></span><span>免费数据 · 本地工作台</span><button id="help" class="icon-button" title="使用帮助">?</button></div>
+</header>
+<main class="workspace">
+  <nav class="drawing-rail" aria-label="画图工具">
+    <button class="tool active" data-tool="cursor" title="选择 / 拖动（Esc）" aria-label="选择 / 拖动">⌖</button>
+    <div class="rail-separator"></div>
+    <button class="tool" data-tool="segment" title="趋势线：依次点击两个点" aria-label="趋势线"><svg viewBox="0 0 24 24"><path d="M5 19L19 5"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="5" r="2"/></svg></button>
+    <button class="tool" data-tool="horizontalStraightLine" title="水平线：点击一个点" aria-label="水平线"><svg viewBox="0 0 24 24"><path d="M3 12h18"/><circle cx="12" cy="12" r="2"/></svg></button>
+    <button class="tool" data-tool="rayLine" title="射线：依次点击两个点" aria-label="射线"><svg viewBox="0 0 24 24"><path d="M5 19L21 3"/><circle cx="5" cy="19" r="2"/></svg></button>
+    <button class="tool" data-tool="parallelStraightLine" title="平行通道：依次点击三个点" aria-label="平行通道"><svg viewBox="0 0 24 24"><path d="M3 16L17 2M7 22L21 8"/></svg></button>
+    <button class="tool" data-tool="fibRetracement" title="斐波那契回撤：依次点击两个点" aria-label="斐波那契回撤"><svg viewBox="0 0 24 24"><path d="M3 4h18M3 10h13M3 15h16M3 20h18M5 21V3"/></svg></button>
+    <button class="tool" data-tool="fibExtension" title="斐波那契扩展：依次点击起点A、终点B、回调点C" aria-label="斐波那契扩展"><svg viewBox="0 0 24 24"><path d="M3 20L10 10l5 5 6-12M3 4h18M3 8h18M3 14h18"/></svg></button>
+    <button class="tool" data-tool="rect" title="矩形：依次点击两个点" aria-label="矩形"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="1"/></svg></button>
+    <button class="tool" data-tool="measurementRuler" title="测量尺：拖动测量，或依次点击起点和终点（Alt+R）" aria-label="测量尺"><svg viewBox="0 0 24 24"><path d="M3 16L16 3l5 5L8 21zM7 12l3 3M10 9l2 2M13 6l3 3"/></svg></button>
+    <div class="rail-separator"></div>
+    <label class="color-label" title="画线颜色"><input id="line-color" type="color" value="#66b8ff" aria-label="画线颜色"></label>
+    <button id="delete-drawing" class="tool" title="删除选中的画线（Delete）" aria-label="删除选中画线"><svg viewBox="0 0 24 24"><path d="M5 6h14M9 6V3h6v3M7 6l1 15h8l1-15M10 10v7M14 10v7"/></svg></button>
+    <div class="rail-bottom"><button id="undo-drawing" class="tool" title="撤销最后一笔（Ctrl+Z）" aria-label="撤销画线">↶</button></div>
+  </nav>
+  <section class="chart-workspace">
+    <div class="chart-toolbar">
+      <form id="symbol-form" class="symbol-form"><select id="market" aria-label="市场"><option value="us">美股</option><option value="fx">外汇</option><option value="cn">A股</option><option value="crypto">加密货币</option><option value="csv">CSV数据</option></select><div class="symbol-search"><input id="symbol" value="AAPL" aria-label="品种代码或名称" spellcheck="false" autocomplete="off"><div id="cn-suggestions" role="listbox" hidden></div></div><button type="submit" title="加载品种" aria-label="加载品种">↵</button></form>
+      <div class="toolbar-divider"></div>
+      <div class="period-picker">
+        <button id="period-toggle" aria-label="选择K线周期" aria-expanded="false" aria-controls="period-menu"><span id="period-current">3日</span><span class="period-chevron" aria-hidden="true">⌄</span></button>
+        <div id="period-menu" role="region" aria-label="K线周期" hidden>
+          <button id="add-period" class="add-period"><span aria-hidden="true">＋</span>添加自定义周期…</button>
+          <div id="period-options"></div>
+          <p class="period-note">当前数据支持日、周、月及其合成周期。日按交易日，周/月按自然周/月计算。</p>
+        </div>
+      </div>
+      <button id="settings-button" class="text-button" title="多日线分组对齐日期">周期设置</button>
+      <div class="toolbar-spacer"></div>
+      <button id="refresh" class="icon-button" title="重新获取行情" aria-label="刷新">⟳</button><button id="screenshot" class="icon-button" title="导出图表PNG" aria-label="导出截图"><svg viewBox="0 0 24 24"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="13" r="4"/></svg></button>
+    </div>
+    <div class="chart-heading"><div><span class="eyebrow" id="market-label">US EQUITIES</span><h1><span id="instrument-name">苹果</span><span class="symbol-tag" id="instrument-code">AAPL</span><span class="period-tag" id="period-label">3日</span></h1></div><div class="price-heading"><strong id="last-price">—</strong><span id="last-change">等待数据</span></div></div>
+    <div class="chart-subbar"><div class="indicator-controls"><button data-indicator="PMA" class="active"><i class="indicator-dot ma"></i>PMA</button><button id="ma-settings" title="均线参数、颜色和样式">均线设置 ⚙</button><button id="fib-settings" title="斐波那契级别、颜色和填充">斐波设置 ⚙</button><button data-indicator="VOL" class="active">成交量</button><button data-indicator="MACD">MACD</button><button data-indicator="RSI">RSI</button></div><span id="candle-change" aria-live="polite"></span><span id="drawing-save">画线自动保存</span></div>
+    <div class="chart-container"><div id="chart" aria-label="交互式K线图"></div><div id="ruler-surface" hidden aria-label="拖动测量区域"></div><output id="measurement-readout" hidden aria-live="polite"></output><div class="chart-watermark" aria-hidden="true">股票看板<span>STOCK BOARD</span></div><div id="loading" class="chart-message"><span class="spinner"></span><strong>正在获取真实行情</strong><p>首次加载会拉取全部可用历史，请稍候</p></div><div id="error" class="chart-message" hidden><strong>暂时无法加载行情</strong><p id="error-text"></p><button id="retry" class="primary-button">重新加载</button></div></div>
+    <div class="chart-bottom"><div class="range-buttons"><button data-range="60">60根</button><button data-range="120" class="active">120根</button><button data-range="all">全部</button><button id="latest">最新 ↗</button></div><span id="bar-info">滚轮缩放 · 拖动平移</span><span>UTC</span><button id="export-csv" class="text-button">导出CSV ↓</button></div>
+    <div class="statusbar"><span><i id="status-dot" class="status-dot"></i><span id="status-text" role="status" aria-live="polite">连接数据源中</span></span><span id="data-time"></span></div>
+  </section>
+  <aside class="sidebar"><div class="sidebar-title"><h2>自选列表</h2><button id="add-watch" class="icon-button" title="将当前品种加入自选" aria-label="加入自选">＋</button></div><div class="watch-tabs"><button data-filter="all" class="active">全部</button><button data-filter="us">美股</button><button data-filter="fx">外汇</button><button data-filter="cn">A股</button><button data-filter="crypto">加密</button></div><div class="list-labels"><span>品种 / 市场</span><span>切换图表</span></div><div id="watchlist"></div><div class="sidebar-bottom"><div class="session-card"><span class="eyebrow">YOUR TIMEFRAME, YOUR VIEW</span><h3>周期，由你定义。</h3><p>3日、5日、任意多日K线。<br>让每一段走势，都有自己的节奏。</p><div class="mini-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div><button id="import-button" class="import-button">＋ 导入自己的CSV行情</button><input id="csv-file" type="file" accept=".csv,text/csv" hidden><div id="source-details" class="source-details">免费公开数据，不同市场可能存在延迟。</div><a class="library-credit" href="https://klinecharts.com/" target="_blank" rel="noreferrer">Charts by KLineCharts ↗</a></div></aside>
+</main>
+<dialog id="custom-period-dialog" aria-labelledby="custom-period-title"><form id="period-form"><div class="dialog-head"><h2 id="custom-period-title">添加自定义周期</h2><button type="button" class="close-dialog icon-button" aria-label="关闭">×</button></div><div class="period-fields"><label for="custom-count">周期数值<input id="custom-count" type="number" min="1" max="250" value="2" required></label><label for="custom-unit">单位<select id="custom-unit"><option value="D">日</option><option value="W">周</option><option value="M">月</option></select></label></div><p id="custom-period-hint" class="muted">1–250个交易日；跳过休市日。</p><p class="muted">添加后保存在周期菜单中，并立即切换。多周固定从周一对齐，多月按自然月合成（3月为季度、12月为年线）。</p><div class="dialog-actions"><button type="button" class="close-dialog text-button">取消</button><button class="primary-button" type="submit">添加并应用</button></div></form></dialog>
+<dialog id="settings-dialog"><form id="settings-form"><div class="dialog-head"><h2>多日周期设置</h2><button type="button" class="close-dialog icon-button" aria-label="关闭">×</button></div><p>每N个实际交易日合成一根K线，跳过休市日。加密货币每天交易，按UTC分日。5日K线与自然周K线分别计算。周线从周一开始；月线按自然月，3月为季度，12月为年线，均不受下方日期影响。</p><label class="field-label" for="anchor">分组对齐日期</label><input id="anchor" type="date" value="2025-01-01" required><p class="muted">从此日期当天或之后的第一个交易日开始分组；更早的数据向前倒排。对齐日期应在已加载数据范围内。固定此日期可保持后续分组稳定。</p><div class="dialog-actions"><button type="button" class="close-dialog text-button">取消</button><button class="primary-button" type="submit">应用设置</button></div></form></dialog>
+<dialog id="help-dialog"><div class="dialog-head"><h2>你的免费图表工作台</h2><button class="close-dialog icon-button" aria-label="关闭">×</button></div><p>输入品种代码后按Enter加载。A股还支持输入股票名称搜索，例如“贵州茅台”“平安银行”，从下拉建议中选择。示例：美股 AAPL / NVDA / SPY，A股 600519 / 000001，外汇 EURUSD / USDJPY / XAUUSD，加密 BTCUSDT / ETHUSDT。</p><p>点击左侧工具，在图表上依次点击落点即可画线。通道和斐波那契扩展需要三个点，其余通常两个点，水平线一个点。测量尺可拖动或依次点击两点，显示价格差、涨跌幅、K线间隔和自然日数，Alt+R打开，Esc退出。鼠标悬停K线显示相对上一根收盘的涨跌幅。完成后可以选中拖动，Delete删除选中画线，Ctrl+Z撤销最后一笔，Esc退出绘图。</p><p>画线按“市场、代码、周期和对齐日期”分别保存。自选和画线存在当前浏览器本地；清除浏览器数据会丢失。行情缓存位于项目data/cache目录。</p><p>CSV表头：<code>date,open,high,low,close,volume</code>。date为YYYY-MM-DD，volume可省略；导入按日线处理。数据仅保存在当前页面，画线仍可本地保存。导出CSV是当前合成周期的数据。</p><p class="muted">免费公开接口可能延迟、限流或停止服务。本工具用于个人图表分析；请查看右下角数据来源和最后行情日期。图表库 KLineCharts 9.8.12，Apache-2.0，许可证见项目public/vendor。</p></dialog>
+<dialog id="ma-dialog"><form id="ma-form"><div class="dialog-head"><h2>PMA 多重均线</h2><button type="button" class="close-dialog icon-button" aria-label="关闭">×</button></div><div class="ma-default"><label for="ma-default-type">默认均线类型</label><select id="ma-default-type"><option>EMA</option><option>SMA</option><option>WMA</option><option>RMA</option><option>ALMA</option></select></div><div id="ma-rows"></div><label class="ma-fill"><input id="ma-fill" type="checkbox" checked> 填充144/169、576/676均线通道</label><p class="muted">默认按图片2：8、144、169、13启用，338关闭，576和676启用。指标周期按当前图表K线计算。EMA从首个价格递推；SMA/WMA/RMA/ALMA达到周期长度后显示。位移以K线根数计算，超出已有数据的部分暂不绘制。</p><div class="dialog-actions"><button id="ma-reset" type="button" class="text-button">恢复图片参数</button><button type="button" class="close-dialog text-button">取消</button><button type="submit" class="primary-button">应用均线</button></div></form></dialog>
+<dialog id="fib-dialog"><form id="fib-form"><div class="dialog-head"><h2>斐波那契线设置</h2><button type="button" class="close-dialog icon-button" aria-label="关闭">×</button></div><p>选择要显示的回撤/扩展比例，并设置每条线的颜色。先在图表中选中一条斐波那契线，再应用设置可同步修改它。</p><div id="fib-rows" class="fib-rows"></div><label class="ma-fill"><input id="fib-fill" type="checkbox" checked> 填充相邻级别区域</label><div class="dialog-actions"><button id="fib-reset" type="button" class="text-button">恢复默认级别</button><button type="button" class="close-dialog text-button">取消</button><button type="submit" class="primary-button">应用设置</button></div></form></dialog>
+<div id="toast" role="status" hidden></div>
+</body></html>
