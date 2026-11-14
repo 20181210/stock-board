@@ -3,13 +3,15 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>股票看板 · Free Chart</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%231a9988'/%3E%3Cpath d='M8 28l8-10 7 5 10-14' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/svg+xml" href="/stock-board.svg">
+  <link rel="alternate icon" type="image/png" href="/stock-board.png">
+  <link rel="apple-touch-icon" href="/stock-board.png">
   <link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/light.css">
   <script defer src="/vendor/klinecharts.min.js"></script><script defer src="/data.js"></script><script defer src="/studies.js"></script><script defer src="/chart-extensions.js"></script><script defer src="/app.js"></script>
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="/" aria-label="股票看板首页"><span class="brand-mark">↗</span><strong>股票看板</strong><span class="brand-en">STOCK BOARD</span></a>
+  <a class="brand" href="/" aria-label="股票看板首页"><img class="brand-mark" src="/stock-board.svg" width="32" height="32" alt=""><strong>股票看板</strong><span class="brand-en">STOCK BOARD</span></a>
   <div id="symbol-tabs" class="symbol-tabs" aria-label="已打开品种"></div>
   <div class="top-right"><span class="live-dot"></span><span>免费数据 · 本地工作台</span><button id="help" class="icon-button" title="使用帮助">?</button></div>
 </header>
