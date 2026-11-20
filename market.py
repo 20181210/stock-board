@@ -133,7 +133,13 @@ def load_market(market, symbol):
             code = ("sh" if code.startswith(("6", "5", "9")) else "bj" if code.startswith(("4", "8", "92")) else "sz") + code
         bars, adjustment = sina_stock(code)
         names = {"sh600519": "贵州茅台", "sz000001": "平安银行", "sh000001": "上证指数"}
-        return bars, dict(name=names.get(code, code.upper()), symbol=code.upper(), source="新浪财经完整历史", currency="CNY", adjustment=adjustment,
+        name = names.get(code)
+        if not name:
+            try:
+                name = (realtime_quote("cn", code) or {}).get("name") or code.upper()
+            except Exception:
+                name = code.upper()
+        return bars, dict(name=name, symbol=code.upper(), source="新浪财经完整历史", currency="CNY", adjustment=adjustment,
                           notice="已加载接口全部可用历史；成交量为股。比例前复权以最新价格为基准，可能与其他软件的复权算法不同。")
     if market == "us":
         code = symbol.upper()
@@ -174,6 +180,127 @@ def load_market(market, symbol):
         bars = crypto_history(code)
         return bars, dict(name=code, symbol=code, source="Binance Public Data", currency="USDT" if code.endswith("USDT") else "报价币",
             adjustment="不适用", notice="现货日线，以UTC 00:00分日；最新一根可能尚未收盘；已分页加载交易对上线以来的全部可用历史。")
+    raise ValueError("不支持的市场")
+
+
+def _num(text):
+    try:
+        value = float(text)
+        return value if math.isfinite(value) else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _sina_raw(url):
+    """Fetch a Sina hq.sinajs.cn quote. These responses use GBK."""
+    request = urllib.request.Request(url, headers={
+        "User-Agent": "Mozilla/5.0", "Referer": "https://finance.sina.com.cn/"})
+    with HTTP.open(request, timeout=10) as response:
+        return response.read().decode("gbk", errors="replace")
+
+
+def _sina_fields(prefix, code):
+    text = _sina_raw("https://hq.sinajs.cn/list=%s%s" % (prefix, code))
+    match = re.search(r'="([^"]*)"', text)
+    if not match or not match.group(1).strip():
+        return None
+    return match.group(1).split(",")
+
+
+def realtime_quote(market, symbol):
+    """Latest real-time quote from free public feeds.
+
+    Returns a dict with price, prevClose, open, high, low, volume, change,
+    changePercent, name, time, source. Returns None when the feed is empty.
+    """
+    if market == "cn":
+        code = symbol.lower()
+        if code.isdigit():
+            code = ("sh" if code.startswith(("6", "5", "9")) else "bj" if code.startswith(("4", "8", "92")) else "sz") + code
+        fields = _sina_fields("", code)
+        if not fields or len(fields) < 32:
+            return None
+        open_price = _num(fields[1]); prev_close = _num(fields[2]); price = _num(fields[3])
+        high = _num(fields[4]); low = _num(fields[5]); volume = _num(fields[8])
+        if price is None or prev_close is None:
+            return None
+        change = price - prev_close
+        return dict(name=fields[0] or code.upper(), price=price, prevClose=prev_close, open=open_price,
+                    high=high, low=low, volume=volume, change=change,
+                    changePercent=change / prev_close * 100 if prev_close else 0.0,
+                    time="%s %s" % (fields[30], fields[31]) if len(fields) > 31 else "",
+                    source="新浪财经实时行情")
+    if market == "us":
+        code = symbol.upper()
+        raw = re.sub(r"\.(OQ|N|A)$", "", code)
+        raw = {"NDX": ".NDX", "IXIC": ".IXIC", "SPX": ".INX", "DJI": ".DJI"}.get(raw, raw)
+        fields = _sina_fields("gb_", raw.lower())
+        if not fields or len(fields) < 27:
+            return None
+        # Sina US layout: [0] name [1] price [2] changePercent [3] time
+        #                  [4] change [5] open [6] high [7] low [10] volume [26] prevClose
+        price = _num(fields[1]); change = _num(fields[4]); prev_close = _num(fields[26])
+        if price is None:
+            return None
+        if prev_close is None and change is not None:
+            prev_close = price - change
+        change_percent = _num(fields[2])
+        if change_percent is None and prev_close:
+            change_percent = (price - prev_close) / prev_close * 100
+        if change is None and prev_close:
+            change = price - prev_close
+        return dict(name=fields[0] or code, price=price, prevClose=prev_close, open=_num(fields[5]),
+                    high=_num(fields[6]), low=_num(fields[7]), volume=_num(fields[10]), change=change,
+                    changePercent=change_percent, time=fields[3] if len(fields) > 3 else "",
+                    source="新浪财经实时行情")
+    if market == "fx":
+        code = symbol.upper().replace("/", "").replace("=X", "")
+        if code == "XAUUSD":
+            fields = _sina_fields("hf_", "XAU")
+            if not fields or len(fields) < 14:
+                return None
+            # Sina gold: [0] prevClose [1] price [2] open [3] sell [4] high
+            #            [5] low [6] time [12] date [13] name
+            price = _num(fields[1]); prev_close = _num(fields[0])
+            if price is None:
+                return None
+            change = price - prev_close if prev_close else None
+            time_str = "%s %s" % (fields[12], fields[6]) if len(fields) > 12 else fields[6]
+            return dict(name=fields[13] if len(fields) > 13 else "现货黄金", price=price, prevClose=prev_close,
+                        open=_num(fields[2]), high=_num(fields[4]), low=_num(fields[5]), volume=None,
+                        change=change, changePercent=change / prev_close * 100 if prev_close else None,
+                        time=time_str, source="新浪国际现货黄金")
+        fields = _sina_fields("fx_s", code.lower())
+        if not fields or len(fields) < 12:
+            return None
+        # Sina forex: [0] time [1] price [2] bid [3] ask [5] open
+        #             [6] high [7] low [9] name [10] changePercent [11] change [17] date
+        price = _num(fields[1])
+        if price is None:
+            return None
+        change = _num(fields[11]); change_percent = _num(fields[10])
+        prev_close = price - change if change is not None else None
+        date_str = fields[17] if len(fields) > 17 else ""
+        time_str = ("%s %s" % (date_str, fields[0])) if date_str else fields[0]
+        return dict(name=fields[9] or code, price=price, prevClose=prev_close, open=_num(fields[5]),
+                    high=_num(fields[6]), low=_num(fields[7]), volume=None, change=change,
+                    changePercent=change_percent, time=time_str, source="新浪外汇实时行情")
+    if market == "crypto":
+        code = symbol.upper().replace("/", "").replace("-", "")
+        payload = json.loads(fetch("https://api.binance.com/api/v3/ticker/24hr?symbol=" + code))
+        if not isinstance(payload, dict) or "lastPrice" not in payload:
+            return None
+        price = _num(payload.get("lastPrice"))
+        if price is None:
+            return None
+        prev_close = _num(payload.get("openPrice"))
+        change = _num(payload.get("priceChange"))
+        change_percent = _num(payload.get("priceChangePercent"))
+        return dict(name=code, price=price, prevClose=prev_close, open=prev_close,
+                    high=_num(payload.get("highPrice")), low=_num(payload.get("lowPrice")),
+                    volume=_num(payload.get("volume")), change=change,
+                    changePercent=change_percent,
+                    time="", source="Binance 24h Ticker")
     raise ValueError("不支持的市场")
 
 

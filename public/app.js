@@ -21,7 +21,7 @@ const state = {
   symbol: session.symbol || 'AAPL', period: session.period || '3', anchor: session.anchor || '2025-01-01',
   data: [], meta: null, watchlist: store.get('watchlist', defaults), filter: 'all', range: '120',
   drawings: new Map(), selected: null, drawingId: null, drawingKey: '', restoring: false,
-  controller: null, requestId: 0, csv: null, indicators: new Map(),
+  controller: null, requestId: 0, csv: null, indicators: new Map(), quote: null,
 };
 if (!store.get('watchlist-v2', false)) {
   for (const symbol of ['XAUUSD', 'NDX']) { const item = defaults.find((row) => row.symbol === symbol); if (!state.watchlist.some((row) => row.symbol === symbol)) state.watchlist.push(item); }
@@ -252,9 +252,22 @@ function selectTool(name) {
 }
 function restoreDrawings() {
   selectTool('cursor');
-  state.restoring = true; chart.removeOverlay(); state.drawings.clear(); state.selected = null;
-  state.drawingKey = `drawings:${state.market}:${state.symbol}:${state.period}:${state.anchor}`;
-  const saved = store.get(state.drawingKey, []);
+  state.restoring = true;
+  for (const id of [...state.drawings.keys()]) chart.removeOverlay(id);
+  state.drawings.clear(); state.selected = null;
+  state.drawingKey = `drawings:${state.market}:${state.symbol}`;
+  let saved = store.get(state.drawingKey, []);
+  if (!saved.length) {
+    // 兼容旧版按周期保存的画线：合并该品种所有旧周期的画线
+    const prefix = `guanshi:${state.drawingKey}:`;
+    const merged = new Map();
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (!key || !key.startsWith(prefix)) continue;
+      try { for (const drawing of JSON.parse(localStorage.getItem(key)) || []) if (drawing && drawing.id) merged.set(drawing.id, drawing); } catch (error) { /* 忽略损坏的旧数据 */ }
+    }
+    if (merged.size) { saved = [...merged.values()]; store.set(state.drawingKey, saved); }
+  }
   for (const drawing of saved) { state.drawings.set(drawing.id, drawing); chart.createOverlay(drawingOptions(drawing)); }
   state.restoring = false;
   $('#drawing-save').textContent = saved.length ? `已保存 ${saved.length} 笔画线` : '画线自动保存';
@@ -281,8 +294,31 @@ function renderWatchlist() {
   const visible = state.watchlist.filter((item) => state.filter === 'all' || item.market === state.filter);
   $('#watchlist').innerHTML = visible.map((item) => {
     const index = state.watchlist.indexOf(item);
-    return `<div class="watch-row ${state.market === item.market && state.symbol === item.symbol ? 'selected' : ''}"><button class="watch-item" data-watch="${index}" title="查看${escapeHtml(item.name)}"><span class="watch-icon ${item.market}">${escapeHtml(item.market === 'crypto' ? (item.symbol.startsWith('BTC') ? '₿' : 'Ξ') : item.market === 'fx' ? '⇄' : item.symbol.slice(0, 1))}</span><span class="watch-name"><strong>${escapeHtml(item.symbol)}</strong><small>${escapeHtml(item.name)} · ${marketNames[item.market]}</small></span><span class="watch-arrow">›</span></button><button class="remove-watch" data-remove="${index}" title="移出自选" aria-label="移除${escapeHtml(item.symbol)}">×</button></div>`;
+    const isCn = item.market === 'cn';
+    const primary = isCn ? (item.name || item.symbol) : item.symbol;
+    const secondary = isCn ? `${item.symbol} · ${marketNames.cn}` : `${item.name} · ${marketNames[item.market]}`;
+    return `<div class="watch-row ${state.market === item.market && state.symbol === item.symbol ? 'selected' : ''}"><button class="watch-item" data-watch="${index}" title="查看${escapeHtml(item.name)}"><span class="watch-icon ${item.market}">${escapeHtml(item.market === 'crypto' ? (item.symbol.startsWith('BTC') ? '₿' : 'Ξ') : item.market === 'fx' ? '⇄' : item.symbol.slice(0, 1))}</span><span class="watch-name"><strong>${escapeHtml(primary)}</strong><small>${escapeHtml(secondary)}</small></span><span class="watch-arrow">›</span></button><button class="remove-watch" data-remove="${index}" title="移出自选" aria-label="移除${escapeHtml(item.symbol)}">×</button></div>`;
   }).join('') || '<p class="empty-list">还没有自选，点击右上角＋添加当前品种。</p>';
+}
+function syncCnName() {
+  if (state.market !== 'cn' || !state.meta || !/[\u4e00-\u9fa5]/.test(state.meta.name || '')) return;
+  let dirty = false;
+  for (const row of state.watchlist) if (row.market === 'cn' && row.symbol === state.symbol && row.name !== state.meta.name) { row.name = state.meta.name; dirty = true; }
+  for (const row of openSymbols) if (row.market === 'cn' && row.symbol === state.symbol && row.name !== state.meta.name) { row.name = state.meta.name; dirty = true; }
+  if (dirty) { store.set('watchlist', state.watchlist); store.set('open-symbols', openSymbols); renderWatchlist(); renderSymbolTabs(); }
+}
+async function refreshCnWatchNames() {
+  const rows = state.watchlist.filter((item) => item.market === 'cn' && !/[\u4e00-\u9fa5]/.test(item.name || ''));
+  if (!rows.length) return;
+  let dirty = false;
+  await Promise.all(rows.map(async (row) => {
+    try {
+      const response = await fetch(`/api/quote?market=cn&symbol=${encodeURIComponent(row.symbol)}`);
+      const result = await response.json();
+      if (result.data && result.data.name) { row.name = result.data.name; dirty = true; }
+    } catch (error) { /* 名称补全失败时保留原名称 */ }
+  }));
+  if (dirty) { store.set('watchlist', state.watchlist); renderWatchlist(); }
 }
 $('#watchlist').addEventListener('click', (event) => {
   const remove = event.target.closest('[data-remove]');
@@ -313,6 +349,7 @@ function fitRange() {
 function display(result) {
   state.data = result.data; state.meta = result.meta;
   rememberOpenSymbol();
+  syncCnName();
   const last = state.data.at(-1), prev = state.data.at(-2);
   showCandleChange(last, prev); $('#measurement-readout').hidden = true;
   const decimals = state.market === 'fx' ? (state.symbol === 'XAUUSD' ? 2 : state.symbol.includes('JPY') ? 3 : 5) : last.close < 1 ? 6 : 2;
@@ -333,7 +370,116 @@ function display(result) {
   $('#bar-info').textContent = `${state.data.length}根 · 滚轮缩放 · 拖动平移`;
   $('#anchor').min = state.meta.firstDate; $('#anchor').max = state.meta.lastDate;
 }
+let quoteTimer = null, quoteController = null;
+function quoteDecimals(market, symbol, price) {
+  if (market === 'fx') return symbol === 'XAUUSD' ? 2 : symbol.includes('JPY') ? 3 : 5;
+  return price != null && price < 1 ? 6 : 2;
+}
+function stopQuotePolling() {
+  if (quoteTimer) { clearTimeout(quoteTimer); quoteTimer = null; }
+  if (quoteController) { quoteController.abort(); quoteController = null; }
+  $('#live-badge').hidden = true; $('#quote-time').hidden = true;
+  $('#live-dot').classList.remove('live', 'live-error');
+  $('#live-status-text').textContent = state.market === 'csv' ? '本地CSV · 无实时行情' : '免费数据 · 本地工作台';
+}
+function quoteDateText(quote) {
+  const match = /(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/.exec(quote.time || '');
+  if (match) {
+    if (state.market === 'us') {
+      // 新浪美股报价时间为北京时间，换算成纽约当地交易日
+      const utc = Date.UTC(+match[1], +match[2] - 1, +match[3], +match[4] - 8, +match[5]);
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(utc));
+    }
+    return `${match[1]}-${match[2]}-${match[3]}`;
+  }
+  return new Date().toISOString().slice(0, 10);
+}
+function samePeriod(date, last) {
+  const period = state.period;
+  const end = dateText(last.endTimestamp || last.timestamp);
+  if (period === '1') return date === end;
+  if (/^\d+$/.test(period)) return (last.count || 1) < Number(period);
+  const unit = period.endsWith('W') ? 'W' : 'M';
+  if (unit === 'M') return date.slice(0, 7) === end.slice(0, 7);
+  const weeks = (iso) => Math.floor((Date.parse(iso) - Date.parse('1970-01-05')) / 604800000);
+  const size = Number(period.replace('W', '')) || 1;
+  return Math.floor(weeks(date) / size) === Math.floor(weeks(end) / size);
+}
+function updateLastBarWithQuote(quote) {
+  if (!state.data.length || quote.price == null) return;
+  const date = quoteDateText(quote);
+  const last = state.data[state.data.length - 1];
+  const lastDay = dateText(last.endTimestamp || last.timestamp);
+  if (date < lastDay) return;
+  const price = quote.price;
+  const high = quote.high != null ? Math.max(quote.high, price) : price;
+  const low = quote.low != null ? Math.min(quote.low, price) : price;
+  const volume = Number(quote.volume) || 0;
+  let bar;
+  if (date === lastDay || samePeriod(date, last)) {
+    bar = Object.assign({}, last, {
+      close: price, high: Math.max(last.high, high), low: Math.min(last.low, low),
+      volume: Math.max(Number(last.volume) || 0, volume),
+      endTimestamp: Math.max(last.endTimestamp || last.timestamp, Date.parse(date + 'T00:00:00Z')),
+    });
+    state.data[state.data.length - 1] = bar;
+  } else {
+    const ts = Date.parse(date + 'T00:00:00Z');
+    bar = { timestamp: ts, open: quote.open != null ? quote.open : price, high, low, close: price, volume, count: 1, endTimestamp: ts };
+    state.data.push(bar);
+    if (state.meta && date > state.meta.lastDate) { state.meta.lastDate = date; $('#data-time').textContent = `${state.meta.firstDate} — ${date}`; }
+  }
+  chart.updateData(bar);
+}
+async function fetchQuote() {
+  if (state.market === 'csv' || !state.data.length) return;
+  quoteController = new AbortController();
+  try {
+    const response = await fetch(`/api/quote?market=${state.market}&symbol=${encodeURIComponent(state.symbol)}`, { signal: quoteController.signal });
+    if (!response.ok) throw new Error('quote failed');
+    const result = await response.json();
+    const quote = result.data;
+    if (!quote) throw new Error('no quote');
+    state.quote = quote;
+    const decimals = quoteDecimals(state.market, state.symbol, quote.price);
+    const priceEl = $('#last-price');
+    priceEl.textContent = format(quote.price, decimals);
+    priceEl.classList.remove('price-flash-up', 'price-flash-down');
+    void priceEl.offsetWidth;
+    if (quote.change != null) priceEl.classList.add(quote.change >= 0 ? 'price-flash-up' : 'price-flash-down');
+    if (quote.change != null && quote.prevClose != null) {
+      const pct = quote.changePercent != null ? quote.changePercent : (quote.change / quote.prevClose * 100);
+      $('#last-change').textContent = `${quote.change >= 0 ? '+' : ''}${format(quote.change, decimals)} (${quote.change >= 0 ? '+' : ''}${pct.toFixed(2)}%) · 实时`;
+      $('#last-change').className = quote.change >= 0 ? 'up' : 'down';
+    }
+    if (quote.time) { $('#quote-time').textContent = quote.time; $('#quote-time').hidden = false; }
+    $('#live-badge').hidden = false;
+    $('#live-dot').classList.add('live'); $('#live-dot').classList.remove('live-error');
+    $('#live-status-text').textContent = '实时行情已连接';
+    updateLastBarWithQuote(quote);
+    const item = openSymbols.find((row) => symbolKey(row) === symbolKey(state));
+    if (item) {
+      item.lastPrice = format(quote.price, decimals);
+      item.lastChange = quote.change;
+      item.lastPct = quote.changePercent;
+      store.set('open-symbols', openSymbols); renderSymbolTabs();
+    }
+  } catch (error) {
+    if (error.name === 'AbortError') return;
+    state.quote = null;
+    $('#live-badge').hidden = true; $('#quote-time').hidden = true;
+    $('#live-dot').classList.add('live-error'); $('#live-dot').classList.remove('live');
+    $('#live-status-text').textContent = '实时行情未连接';
+  }
+  quoteTimer = setTimeout(fetchQuote, 8000);
+}
+function startQuotePolling() {
+  stopQuotePolling();
+  state.quote = null;
+  fetchQuote();
+}
 async function load(refresh = false) {
+  stopQuotePolling();
   const requestId = ++state.requestId;
   state.controller?.abort(); state.controller = new AbortController();
   selectTool('cursor'); $('#loading').hidden = false; $('#error').hidden = true; $('#refresh').disabled = true;
@@ -352,6 +498,7 @@ async function load(refresh = false) {
     if (requestId !== state.requestId) return;
     if (!result.data?.length) throw new Error('未找到有效行情');
     display(result);
+    startQuotePolling();
   } catch (error) {
     if (error.name === 'AbortError' || requestId !== state.requestId) return;
     $('#error-text').textContent = error.message; $('#error').hidden = false;
@@ -478,4 +625,4 @@ $('#csv-file').addEventListener('change', async () => {
   } catch (error) { toast(error.message); $('#market').value = state.market; }
   $('#csv-file').value = '';
 });
-syncControls(); load();
+syncControls(); load(); refreshCnWatchNames();

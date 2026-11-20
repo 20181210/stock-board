@@ -9,7 +9,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
-from market import aggregate, load_market, fetch, HTTP
+from market import aggregate, load_market, fetch, HTTP, realtime_quote
 import urllib.parse
 
 
@@ -83,6 +83,21 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/api/health":
             return self.send_json({"ok": True, "app": "free-chart"})
+        if parsed.path == "/api/quote":
+            args = parse_qs(parsed.query)
+            get = lambda key, default: args.get(key, [default])[0]
+            market, symbol = get("market", "us"), get("symbol", "AAPL").strip()[:32]
+            if market not in ("us", "cn", "fx", "crypto"):
+                return self.send_json({"error": "不支持的市场"}, 400)
+            try:
+                quote = realtime_quote(market, symbol)
+                if not quote:
+                    return self.send_json({"error": "实时行情暂无数据"}, 404)
+                return self.send_json({"data": quote})
+            except ValueError as error:
+                return self.send_json({"error": str(error)}, 400)
+            except Exception as error:
+                return self.send_json({"error": "实时行情获取失败：" + str(error)}, 502)
         if parsed.path == "/api/cn-search":
             args = parse_qs(parsed.query)
             try:

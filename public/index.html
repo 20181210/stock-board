@@ -13,7 +13,7 @@
 <header class="topbar">
   <a class="brand" href="/" aria-label="股票看板首页"><img class="brand-mark" src="/stock-board.svg" width="32" height="32" alt=""><strong>股票看板</strong><span class="brand-en">STOCK BOARD</span></a>
   <div id="symbol-tabs" class="symbol-tabs" aria-label="已打开品种"></div>
-  <div class="top-right"><span class="live-dot"></span><span>免费数据 · 本地工作台</span><button id="help" class="icon-button" title="使用帮助">?</button></div>
+  <div class="top-right"><span id="live-dot" class="live-dot"></span><span id="live-status-text">免费数据 · 本地工作台</span><button id="help" class="icon-button" title="使用帮助">?</button></div>
 </header>
 <main class="workspace">
   <nav class="drawing-rail" aria-label="画图工具">
@@ -48,7 +48,7 @@
       <div class="toolbar-spacer"></div>
       <button id="refresh" class="icon-button" title="重新获取行情" aria-label="刷新">⟳</button><button id="screenshot" class="icon-button" title="导出图表PNG" aria-label="导出截图"><svg viewBox="0 0 24 24"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="13" r="4"/></svg></button>
     </div>
-    <div class="chart-heading"><div><span class="eyebrow" id="market-label">US EQUITIES</span><h1><span id="instrument-name">苹果</span><span class="symbol-tag" id="instrument-code">AAPL</span><span class="period-tag" id="period-label">3日</span></h1></div><div class="price-heading"><strong id="last-price">—</strong><span id="last-change">等待数据</span></div></div>
+    <div class="chart-heading"><div><span class="eyebrow" id="market-label">US EQUITIES</span><h1><span id="instrument-name">苹果</span><span class="symbol-tag" id="instrument-code">AAPL</span><span class="period-tag" id="period-label">3日</span></h1></div><div class="price-heading"><div class="price-row"><strong id="last-price">—</strong><span id="live-badge" class="live-badge" hidden title="实时行情刷新中">实时</span></div><span id="last-change">等待数据</span><span id="quote-time" class="quote-time" hidden></span></div></div>
     <div class="chart-subbar"><div class="indicator-controls"><button data-indicator="PMA" class="active"><i class="indicator-dot ma"></i>PMA</button><button id="ma-settings" title="均线参数、颜色和样式">均线设置 ⚙</button><button id="fib-settings" title="斐波那契级别、颜色和填充">斐波设置 ⚙</button><button data-indicator="VOL" class="active">成交量</button><button data-indicator="MACD">MACD</button><button data-indicator="RSI">RSI</button></div><span id="candle-change" aria-live="polite"></span><span id="drawing-save">画线自动保存</span></div>
     <div class="chart-container"><div id="chart" aria-label="交互式K线图"></div><div id="ruler-surface" hidden aria-label="拖动测量区域"></div><output id="measurement-readout" hidden aria-live="polite"></output><div class="chart-watermark" aria-hidden="true">股票看板<span>STOCK BOARD</span></div><div id="loading" class="chart-message"><span class="spinner"></span><strong>正在获取真实行情</strong><p>首次加载会拉取全部可用历史，请稍候</p></div><div id="error" class="chart-message" hidden><strong>暂时无法加载行情</strong><p id="error-text"></p><button id="retry" class="primary-button">重新加载</button></div></div>
     <div class="chart-bottom"><div class="range-buttons"><button data-range="60">60根</button><button data-range="120" class="active">120根</button><button data-range="all">全部</button><button id="latest">最新 ↗</button></div><span id="bar-info">滚轮缩放 · 拖动平移</span><span>UTC</span><button id="export-csv" class="text-button">导出CSV ↓</button></div>
